@@ -1,0 +1,30 @@
+{
+  "name": "pixel-print",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "earcut": "^3.2.4",
+    "fflate": "^0.8.3",
+    "idb-keyval": "^6.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.176.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.176.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "5.8",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  }
+}
