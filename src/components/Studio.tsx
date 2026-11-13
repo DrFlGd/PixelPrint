@@ -3,8 +3,10 @@ import { zipSync } from 'fflate';
 import type { StudioTarget } from '../App';
 import { extractSprite, spriteColors } from '../lib/sprite';
 import { autoMap, usedFilaments, type ColorMapping, type Filament } from '../lib/palette';
-import { autoBaseSize, BASE_SIZES, buildModel, DEFAULT_MODEL, tabThickness, type ModelMode, type ModelSettings } from '../lib/model';
-import { slotDepth, type StandShape } from '../lib/stand';
+import { autoBaseSize, BASE_SIZES, buildModel, DEFAULT_MODEL, postLength, tabThickness, withDefaults, type ModelMode, type ModelSettings } from '../lib/model';
+import { layoutStandMagnets, slotDepth, type PostSettings, type StandShape } from '../lib/stand';
+import type { MagnetSettings } from '../lib/magnets';
+import MagnetControls from './MagnetControls';
 import { meshVolume, translateMesh } from '../lib/mesh';
 import { luminance } from '../lib/color';
 import { to3mf } from '../lib/export/threemf';
@@ -65,7 +67,7 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
   const [maxColors, setMaxColors] = useState(design?.maxColors ?? 4);
   const [mapping, setMapping] = useState<ColorMapping>(() => design?.mapping ?? autoMap(colors, filaments, maxColors));
   const [model, setModel] = useState<ModelSettings>(() => {
-    if (design) return design.model;
+    if (design) return withDefaults(design.model);
     const pixelSize = Math.min(3, Math.max(0.5, Math.round((40 / Math.max(1, grid.h)) * 10) / 10));
     return { ...DEFAULT_MODEL, pixelSize };
   });
@@ -84,18 +86,31 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
   const fil = (id: string) => filaments.find((f) => f.id === id);
   const set = (patch: Partial<ModelSettings>) => setModel((m) => ({ ...m, ...patch }));
   const setStand = (patch: Partial<ModelSettings['stand']>) => setModel((m) => ({ ...m, stand: { ...m.stand, ...patch } }));
+  const setPost = (patch: Partial<PostSettings>) => setModel((m) => ({ ...m, stand: { ...m.stand, post: { ...m.stand.post, ...patch } } }));
+  const post = model.stand.post;
 
   const levels = useMemo(() => defaultLevels(used, filaments, model.levels), [used, filaments, model.levels]);
 
   // Resolve automatic stand size before building.
   const effective = useMemo<ModelSettings>(() => {
     const st = model.stand;
-    let lo = Infinity, hi = -1;
-    for (let i = 0; i < grid.w; i++) if (grid.px[(grid.h - 1) * grid.w + i]) { lo = Math.min(lo, i); hi = Math.max(hi, i); }
-    const tabLen = hi >= 0 ? (hi - lo + 1) * model.pixelSize : 0;
-    const auto = autoBaseSize(tabLen, tabThickness(model));
-    const width = st.autoSize ? auto : st.width;
-    const depth = st.autoSize ? Math.max(tabThickness(model) + 8, Math.round(auto * 0.65)) : st.depth;
+    const tabLen = postLength(grid, model);
+    const thick = tabThickness(model);
+    let width = st.width;
+    let depth = st.depth;
+    if (st.autoSize) {
+      // Smallest common base that fits the post and every requested magnet.
+      const c = st.clearance;
+      const slots = [{ x0: -tabLen / 2 - c, x1: tabLen / 2 + c, y0: -thick / 2 - c, y1: thick / 2 + c }];
+      const minSize = autoBaseSize(tabLen, thick);
+      const sizes = [...BASE_SIZES.filter((d) => d >= minSize), minSize, 80, 100];
+      for (const d of sizes) {
+        width = d;
+        depth = st.shape === 'oval' || st.shape === 'rect' ? Math.max(thick + 8, Math.round(d * 0.65)) : d;
+        const trial = layoutStandMagnets({ ...st, width, depth }, slots);
+        if (!st.magnets.enabled || trial.placed.length >= Math.min(st.magnets.count, 4) || trial.warnings.some((w) => /Raise|thin/.test(w))) break;
+      }
+    }
     return { ...model, levels, stand: { ...st, width, depth } };
   }, [model, levels, grid]);
 
@@ -190,6 +205,9 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
   };
 
   const sd = slotDepth(effective.stand);
+  const pauses = [...new Set([built.figureMagnets.pauseZ, built.standMagnets?.pauseZ ?? null].filter((z): z is number => z !== null))].sort(
+    (a, b) => a - b,
+  );
   const mode = MODES.find((m) => m.value === model.mode)!;
 
   return (
@@ -387,7 +405,7 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
         </div>
         {(model.mode !== 'flat' && model.mode !== 'stacked') || model.stand.enabled ? (
           <div className="inline-field">
-            <span className="field-label">{model.mode === 'one-sided' || model.mode === 'two-sided' ? 'Core filament' : 'Tab filament'}</span>
+            <span className="field-label">{model.mode === 'one-sided' || model.mode === 'two-sided' ? 'Core filament' : 'Post filament'}</span>
             <FilamentPicker value={model.backingId} filaments={filaments} onChange={(backingId) => set({ backingId })} />
           </div>
         ) : null}
@@ -443,7 +461,65 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
                 />
               )}
               <NumberField id="stand-h" label="Height" unit="mm" step={0.5} min={1.5} value={model.stand.height} onChange={(height) => setStand({ height })} />
-              <NumberField id="slot-d" label="Slot depth" unit="mm" step={0.2} min={0.4} value={model.stand.slotDepth} onChange={(slotDepth) => setStand({ slotDepth })} />
+              <NumberField id="chamfer" label="Edge bevel" unit="mm" step={0.2} min={0} value={model.stand.chamfer} onChange={(chamfer) => setStand({ chamfer })} />
+            </div>
+            <div className="inline-field">
+              <span className="field-label">Stand filament</span>
+              <FilamentPicker value={model.stand.filamentId} filaments={filaments} onChange={(filamentId) => setStand({ filamentId })} />
+            </div>
+
+            <h3 className="sublabel">Post</h3>
+            <Segmented
+              value={post.style}
+              options={[
+                { value: 'bar', label: 'One bar', title: 'A single post along the bottom of the sprite' },
+                { value: 'pegs', label: 'Two pegs', title: 'A peg under each end of the bottom row' },
+              ]}
+              onChange={(style) => setPost({ style })}
+            />
+            <div className="fields two">
+              {post.style === 'bar' ? (
+                <div className="field">
+                  <NumberField
+                    id="post-w"
+                    label="Width"
+                    unit="mm"
+                    step={0.5}
+                    min={1}
+                    value={post.width > 0 ? post.width : postLength(grid, effective)}
+                    onChange={(width) => setPost({ width })}
+                  />
+                  <button className={'chip' + (post.width === 0 ? ' on' : '')} onClick={() => setPost({ width: 0 })}>
+                    Match bottom row
+                  </button>
+                </div>
+              ) : (
+                <NumberField id="peg-w" label="Peg width" unit="mm" step={0.5} min={1} value={post.pegWidth} onChange={(pegWidth) => setPost({ pegWidth })} />
+              )}
+              <div className="field">
+                <NumberField
+                  id="post-t"
+                  label="Thickness"
+                  unit="mm"
+                  step={0.2}
+                  min={0.8}
+                  value={tabThickness(effective)}
+                  onChange={(thickness) => setPost({ thickness })}
+                />
+                <button className={'chip' + (post.thickness === 0 ? ' on' : '')} onClick={() => setPost({ thickness: 0 })}>
+                  Full thickness
+                </button>
+              </div>
+              <NumberField
+                id="slot-d"
+                label="Length into base"
+                unit="mm"
+                step={0.2}
+                min={0.4}
+                value={model.stand.slotDepth}
+                onChange={(slotDepth) => setStand({ slotDepth })}
+                hint="The base must be at least 0.6 mm taller than this"
+              />
               <NumberField
                 id="clearance"
                 label="Slot clearance"
@@ -453,16 +529,30 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
                 max={1}
                 value={model.stand.clearance}
                 onChange={(clearance) => setStand({ clearance })}
-                hint="Gap on each side of the tab. 0.1–0.2 mm gives a snug press fit on most printers"
+                hint="Gap on each side of the post. 0.1–0.2 mm gives a snug press fit on most printers"
               />
-              <NumberField id="chamfer" label="Edge bevel" unit="mm" step={0.2} min={0} value={model.stand.chamfer} onChange={(chamfer) => setStand({ chamfer })} />
             </div>
-            <div className="inline-field">
-              <span className="field-label">Stand filament</span>
-              <FilamentPicker value={model.stand.filamentId} filaments={filaments} onChange={(filamentId) => setStand({ filamentId })} />
-            </div>
+
+            <h3 className="sublabel">Magnets</h3>
+            <MagnetControls
+              id="stand-mag"
+              label="Magnets in the base"
+              value={model.stand.magnets}
+              onChange={(magnets) => setStand({ magnets })}
+              report={built.standMagnets}
+            />
           </>
         )}
+
+        <h2 className="label">Figure magnets</h2>
+        <MagnetControls
+          id="fig-mag"
+          label="Magnets in the back"
+          value={model.magnets}
+          onChange={(magnets: MagnetSettings) => set({ magnets })}
+          report={built.figureMagnets}
+        />
+        {model.magnets.enabled && <p className="help">Pockets go in the back face, which sits on the print bed. Good for fridge magnets or a steel display board.</p>}
 
         <h2 className="label">Filament use</h2>
         <ul className="usage">
@@ -476,6 +566,18 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
         </ul>
 
         <div className="export">
+          {pauses.length > 0 && (
+            <p className="pause-note">
+              Add a pause in your slicer at{' '}
+              {pauses.map((z, i) => (
+                <span key={z}>
+                  {i > 0 && (i === pauses.length - 1 ? ' and ' : ', ')}
+                  <strong className="mono">Z {z.toFixed(2)} mm</strong>
+                </span>
+              ))}{' '}
+              to insert the magnets.
+            </p>
+          )}
           <button className="btn primary wide" onClick={export3mf}>
             Download 3MF (multi-color)
           </button>

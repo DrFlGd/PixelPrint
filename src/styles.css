@@ -126,7 +126,7 @@ select, input.grow, .name-input, .plain {
 }
 .segmented button.on { background: var(--panel-2); color: var(--fg); box-shadow: inset 0 0 0 1px #3a3f55; }
 
-.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 12px; }
+.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 12px; position: relative; }
 .toggle input { position: absolute; opacity: 0; }
 .toggle-track { width: 34px; height: 20px; border-radius: 99px; background: var(--line); position: relative; transition: background 0.15s; flex: none; }
 .toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--fg); transition: transform 0.15s; }
@@ -215,7 +215,8 @@ select, input.grow, .name-input, .plain {
 .dims-row span { color: var(--muted); font-family: var(--body); }
 .status { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 8px 14px; border-radius: 8px; }
 
-.max-colors { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.max-colors { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.max-colors > .field-label { flex-basis: 100%; }
 .max-colors select { flex: 1; }
 .color-list, .level-list, .usage, .filaments ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .color-list li { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 7px; }
@@ -257,3 +258,16 @@ select, input.grow, .name-input, .plain {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Post and magnet controls */
+.sublabel { font-size: 12.5px; font-weight: 600; margin: 18px 0 8px; color: var(--fg); }
+.magnets { display: flex; flex-direction: column; gap: 10px; }
+.magnets .toggle { margin-bottom: 0; }
+.magnets .fields { margin-top: 0; }
+.field > .chip { align-self: flex-start; margin-top: 2px; font-size: 11.5px; padding: 2px 8px; }
+.magnet-report p { margin: 0; font-size: 12.5px; padding: 6px 10px; border-radius: 6px; }
+.magnet-report p + p { margin-top: 6px; }
+.magnet-report .ok { background: rgba(121, 198, 255, 0.1); color: var(--fg); }
+.magnet-report .warn { background: rgba(255, 181, 71, 0.12); color: #ffd79a; }
+.pause-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+.pause-note strong { color: var(--fg); font-weight: 500; }
