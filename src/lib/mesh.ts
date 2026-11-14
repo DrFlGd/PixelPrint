@@ -1,3 +1,5 @@
+import earcut from 'earcut';
+
 /** Indexed triangle mesh in millimetres. */
 export interface Mesh {
   positions: number[];
@@ -69,4 +71,94 @@ export function bounds(meshes: Mesh[]) {
         max[k] = Math.max(max[k], m.positions[i + k]);
       }
   return { min, max };
+}
+
+export type P2 = [number, number];
+
+/** Fill a flat polygon (with optional holes) at height z, facing up or down. */
+export function fillPolygon(b: MeshBuilder, outer: P2[], holes: P2[][], z: number, up: boolean) {
+  const pts = [...outer, ...holes.flat()];
+  const holeIdx: number[] = [];
+  let n = outer.length;
+  for (const h of holes) {
+    holeIdx.push(n);
+    n += h.length;
+  }
+  const flat = earcut(pts.flat(), holeIdx.length ? holeIdx : undefined);
+  const tris: [number, number, number][] = [];
+  for (let t = 0; t < flat.length; t += 3) {
+    const [a, c, e] = [flat[t], flat[t + 1], flat[t + 2]];
+    tris.push(cross(pts, a, c, e) > 0 === up ? [a, c, e] : [a, e, c]);
+  }
+  splitTJunctions(pts, tris);
+  const ids = pts.map(([x, y]) => b.vertex(x, y, z));
+  for (const [a, c, e] of tris) b.tri(ids[a], ids[c], ids[e]);
+}
+
+function cross(pts: P2[], a: number, b: number, c: number) {
+  return (pts[b][0] - pts[a][0]) * (pts[c][1] - pts[a][1]) - (pts[c][0] - pts[a][0]) * (pts[b][1] - pts[a][1]);
+}
+
+/**
+ * Earcut can leave a vertex lying in the middle of another triangle's edge when hole edges
+ * are collinear (e.g. two slots in a row). Split those triangles so every edge is shared exactly.
+ */
+function splitTJunctions(pts: P2[], tris: [number, number, number][]) {
+  const onSegment = (v: number, p: number, q: number) => {
+    if (v === p || v === q) return false;
+    const [px, py] = pts[p], [qx, qy] = pts[q], [vx, vy] = pts[v];
+    const len = Math.hypot(qx - px, qy - py);
+    if (len < 1e-9) return false;
+    if (Math.abs((qx - px) * (vy - py) - (qy - py) * (vx - px)) / len > 1e-7) return false;
+    const t = ((vx - px) * (qx - px) + (vy - py) * (qy - py)) / (len * len);
+    return t > 1e-9 && t < 1 - 1e-9;
+  };
+  for (let i = 0; i < tris.length; i++) {
+    const t = tris[i];
+    split: for (let e = 0; e < 3; e++) {
+      const p = t[e], q = t[(e + 1) % 3], r = t[(e + 2) % 3];
+      for (let v = 0; v < pts.length; v++) {
+        if (onSegment(v, p, q)) {
+          tris[i] = [p, v, r];
+          tris.push([v, q, r]);
+          i--;
+          break split;
+        }
+      }
+    }
+  }
+  for (let i = tris.length - 1; i >= 0; i--) {
+    const [x, y, z] = tris[i];
+    if (x === y || y === z || x === z || Math.abs(cross(pts, x, y, z)) < 1e-12) tris.splice(i, 1);
+  }
+}
+
+/**
+ * Vertical wall between two loops of equal length. A counter-clockwise loop (seen from above)
+ * faces outward; pass a clockwise loop for the inside wall of a hole.
+ */
+export function wall(b: MeshBuilder, lo: P2[], zLo: number, hi: P2[], zHi: number) {
+  for (let i = 0; i < lo.length; i++) {
+    const n = (i + 1) % lo.length;
+    b.quad(
+      b.vertex(lo[i][0], lo[i][1], zLo),
+      b.vertex(lo[n][0], lo[n][1], zLo),
+      b.vertex(hi[n][0], hi[n][1], zHi),
+      b.vertex(hi[i][0], hi[i][1], zHi),
+    );
+  }
+}
+
+export const CIRCLE_SEGMENTS = 32;
+
+/**
+ * Counter-clockwise polygon around (cx, cy) whose flat sides sit at radius r,
+ * so a round part of radius r always fits inside.
+ */
+export function circle(cx: number, cy: number, r: number, n = CIRCLE_SEGMENTS): P2[] {
+  const R = r / Math.cos(Math.PI / n);
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    return [cx + Math.cos(a) * R, cy + Math.sin(a) * R] as P2;
+  });
 }

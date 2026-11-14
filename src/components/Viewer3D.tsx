@@ -113,12 +113,12 @@ const Viewer3D = forwardRef<ViewerHandle, Props>(function Viewer3D({ model, colo
       const hit = ray.intersectObjects(figure.children, false)[0];
       if (!hit || !hit.face) return;
       const p = figure.worldToLocal(hit.point.clone()).addScaledVector(hit.face.normal, -0.01);
-      const g = modelRef.current.grid;
-      const i = g.xs.findIndex((x, n) => n < g.nx && p.x >= x && p.x < g.xs[n + 1]);
-      const j = g.ys.findIndex((y, n) => n < g.ny && p.y >= y && p.y < g.ys[n + 1]);
-      if (i < 0 || j < g.tabRows) return;
-      const rows = g.ny - g.tabRows;
-      pickRef.current?.(i, rows - 1 - (j - g.tabRows));
+      const md = modelRef.current;
+      if (p.y < md.postLength) return;
+      const col = Math.floor(p.x / md.pixelSize);
+      const row = md.spriteRows - 1 - Math.floor((p.y - md.postLength) / md.pixelSize);
+      if (col < 0 || row < 0 || row >= md.spriteRows) return;
+      pickRef.current?.(col, row);
     };
     renderer.domElement.addEventListener('pointerdown', onDown);
     renderer.domElement.addEventListener('pointerup', onUp);
@@ -189,7 +189,7 @@ const Viewer3D = forwardRef<ViewerHandle, Props>(function Viewer3D({ model, colo
 
     // Print coordinates already stand the figure up (+Y up, front +Z); center it on the stand.
     const lift = model.stand ? standHeight - slotDepth : 0;
-    c.figure.position.set(-model.tabCenterX, lift, -model.thickness / 2);
+    c.figure.position.set(-model.postCenterX, lift, -model.postCenterZ);
 
     if (model.stand) {
       const s = new THREE.Mesh(toGeometry(model.stand.mesh), mat(model.stand.filamentId));

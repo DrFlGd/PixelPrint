@@ -15,7 +15,15 @@ Turn video game sprite sheets into 3D-printable pixel figures with real filament
 | Stacked | Each filament sits at its own height (levels set per filament), so colors read as raised layers. |
 | Flat | One level; every pixel is a full-thickness column of its color. |
 
-**Stand:** optional round, oval, square or rectangular base with a pocket. The figure gets a tab under its bottom row that slots into it. Clearance, slot depth, height and edge bevel are adjustable; Auto picks the smallest common miniature base (20/25/32/40/50/60 mm) that fits.
+**Stand:** optional round, oval, square or rectangular base with slots. Auto picks the smallest common miniature base (20/25/32/40/50/60 mm) that fits the post and any base magnets. Height and edge bevel are adjustable.
+
+**Post:** the part of the figure that slots into the base. Choose one bar (matching the sprite's bottom row or a custom width) or two pegs, and set its thickness, how far it reaches into the base, and the slot clearance.
+
+**Magnets:** add round pockets for common disc magnets (5×2 up to 12×3 mm, or any size) in the bottom of the base, the back of the figure, or both.
+- *Open* pockets open onto the print bed; glue the magnets in afterwards.
+- *Sealed* pockets start 0.6 mm above the bed and are closed over. The app shows the Z height to add a pause at in your slicer so you can drop the magnets in.
+- Base magnets go in the middle, beside the slot, or spread around the base. If the slot leaves no room, the app tells you how tall the base needs to be.
+- Figure magnets are placed automatically where there's enough solid plastic: anywhere in the core for 1-sided figures, or on a single-color patch for the other styles.
 
 **Filaments:** edit the list under *Edit my filaments*, tick the ones you have loaded, and set *Max filaments* (e.g. 4 for one AMS). Auto-match picks the nearest owned filament for each color (CIE Lab distance) and merges the smallest groups until it's under the limit. Click any pixel on the 3D model to change its filament.
 
