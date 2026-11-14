@@ -222,3 +222,43 @@ export function spriteColors(grid: PixelGrid): { hex: string; count: number }[] 
   for (const p of grid.px) if (p) m.set(p, (m.get(p) ?? 0) + 1);
   return [...m.entries()].map(([hex, count]) => ({ hex, count })).sort((a, b) => b.count - a.count);
 }
+
+/** Pixel value used for border pixels; mapped to the border filament instead of a sprite color. */
+export const BORDER = 'border';
+
+export interface BorderSettings {
+  enabled: boolean;
+  /** Outline width in sprite pixels. */
+  width: number;
+  /** Also fill pixels that only touch the sprite at a corner, for a solid outline. */
+  corners: boolean;
+  filamentId: string;
+}
+
+export const DEFAULT_BORDER: BorderSettings = { enabled: false, width: 1, corners: true, filamentId: 'black' };
+
+/** Grow the sprite by `width` pixels on every side and outline it with BORDER pixels. */
+export function addBorder(grid: PixelGrid, width: number, corners: boolean): PixelGrid {
+  const pad = Math.max(0, Math.round(width));
+  if (!pad || !grid.w) return grid;
+  const w = grid.w + pad * 2, h = grid.h + pad * 2;
+  let px: (string | null)[] = new Array(w * h).fill(null);
+  for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) px[(y + pad) * w + x + pad] = grid.px[y * grid.w + x];
+  for (let step = 0; step < pad; step++) {
+    const next = px.slice();
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        if (px[y * w + x]) continue;
+        let touch = false;
+        for (let dy = -1; dy <= 1 && !touch; dy++)
+          for (let dx = -1; dx <= 1 && !touch; dx++) {
+            if ((!dx && !dy) || (!corners && dx && dy)) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && ny >= 0 && nx < w && ny < h && px[ny * w + nx]) touch = true;
+          }
+        if (touch) next[y * w + x] = BORDER;
+      }
+    px = next;
+  }
+  return { w, h, px };
+}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { zipSync } from 'fflate';
 import type { StudioTarget } from '../App';
-import { extractSprite, spriteColors } from '../lib/sprite';
+import { addBorder, BORDER, extractSprite, spriteColors, type BorderSettings } from '../lib/sprite';
 import { autoMap, usedFilaments, type ColorMapping, type Filament } from '../lib/palette';
 import { autoBaseSize, BASE_SIZES, buildModel, DEFAULT_MODEL, postLength, tabThickness, withDefaults, type ModelMode, type ModelSettings } from '../lib/model';
 import { layoutStandMagnets, slotDepth, type PostSettings, type StandShape } from '../lib/stand';
@@ -82,7 +82,18 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
     if (colors.some((c) => !mapping[c.hex])) setMapping((m) => ({ ...autoMap(colors, filaments, maxColors), ...m }));
   }, [colors, mapping, filaments, maxColors]);
 
-  const used = useMemo(() => usedFilaments(mapping, colors), [mapping, colors]);
+  const border = model.border;
+  // The outline is extra pixels around the sprite, mapped to the border filament.
+  const shape = useMemo(() => (border.enabled ? addBorder(grid, border.width, border.corners) : grid), [grid, border.enabled, border.width, border.corners]);
+  const buildMapping = useMemo(
+    () => (border.enabled ? { ...mapping, [BORDER]: border.filamentId } : mapping),
+    [mapping, border.enabled, border.filamentId],
+  );
+  const used = useMemo(() => {
+    const u = usedFilaments(mapping, colors);
+    return border.enabled && !u.includes(border.filamentId) ? [...u, border.filamentId] : u;
+  }, [mapping, colors, border.enabled, border.filamentId]);
+  const setBorder = (patch: Partial<BorderSettings>) => setModel((m) => ({ ...m, border: { ...m.border, ...patch } }));
   const fil = (id: string) => filaments.find((f) => f.id === id);
   const set = (patch: Partial<ModelSettings>) => setModel((m) => ({ ...m, ...patch }));
   const setStand = (patch: Partial<ModelSettings['stand']>) => setModel((m) => ({ ...m, stand: { ...m.stand, ...patch } }));
@@ -94,7 +105,7 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
   // Resolve automatic stand size before building.
   const effective = useMemo<ModelSettings>(() => {
     const st = model.stand;
-    const tabLen = postLength(grid, model);
+    const tabLen = postLength(shape, model);
     const thick = tabThickness(model);
     let width = st.width;
     let depth = st.depth;
@@ -112,9 +123,9 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
       }
     }
     return { ...model, levels, stand: { ...st, width, depth } };
-  }, [model, levels, grid]);
+  }, [model, levels, shape]);
 
-  const built = useMemo(() => buildModel(grid, mapping, effective), [grid, mapping, effective]);
+  const built = useMemo(() => buildModel(shape, buildMapping, effective), [shape, buildMapping, effective]);
   const colorMap = useMemo(() => Object.fromEntries(filaments.map((f) => [f.id, f.hex])), [filaments]);
 
   const usage = useMemo(() => {
@@ -127,13 +138,13 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
   const totalGrams = [...usage.values()].reduce((a, b) => a + b, 0);
 
   const pick = (col: number, row: number) => {
-    const hex = grid.px[row * grid.w + col];
+    const hex = shape.px[row * shape.w + col];
     if (hex) setPickerFor(hex);
   };
 
   useEffect(() => {
     if (!pickerFor) return;
-    document.getElementById(`color-${pickerFor.slice(1)}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    document.getElementById(pickerFor === BORDER ? 'border-row' : `color-${pickerFor.slice(1)}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [pickerFor]);
 
   const safeName = name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'pixel-figure';
@@ -266,6 +277,38 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
         </ul>
         <p className="hint">Click a pixel on the model to change its color.</p>
 
+        <h2 className="label">Border</h2>
+        <Toggle id="border-on" label="Add border" checked={border.enabled} onChange={(enabled) => setBorder({ enabled })} />
+        {border.enabled && (
+          <div className="border-controls">
+            <div id="border-row" className={'inline-field' + (pickerFor === BORDER ? ' active' : '')}>
+              <span className="field-label">Border filament</span>
+              <FilamentPicker
+                value={border.filamentId}
+                filaments={filaments}
+                open={pickerFor === BORDER}
+                onOpenChange={(o) => setPickerFor(o ? BORDER : null)}
+                onChange={(filamentId) => setBorder({ filamentId })}
+              />
+            </div>
+            <Segmented
+              label="Width"
+              value={String(border.width)}
+              options={[1, 2, 3, 4].map((n) => ({ value: String(n), label: `${n} px` }))}
+              onChange={(w) => setBorder({ width: +w })}
+            />
+            <Segmented
+              label="Corners"
+              value={border.corners ? 'filled' : 'notched'}
+              options={[
+                { value: 'filled', label: 'Filled', title: 'Outline also fills diagonal corners' },
+                { value: 'notched', label: 'Notched', title: 'Outline follows edges only, classic pixel look' },
+              ]}
+              onChange={(v) => setBorder({ corners: v === 'filled' })}
+            />
+          </div>
+        )}
+
         {model.mode === 'stacked' && (
           <>
             <h2 className="label">Levels</h2>
@@ -332,7 +375,7 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
           </div>
           <div className="dims-row mono">
             <span>Sprite</span>
-            {grid.w} × {grid.h} px
+            {shape.w} × {shape.h} px
           </div>
           <div className="dims-row mono">
             <span>PLA</span>≈ {totalGrams.toFixed(1)} g
@@ -364,8 +407,8 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
             unit="mm"
             step={1}
             min={2}
-            value={grid.h * model.pixelSize}
-            onChange={(h) => set({ pixelSize: h / Math.max(1, grid.h) })}
+            value={shape.h * model.pixelSize}
+            onChange={(h) => set({ pixelSize: h / Math.max(1, shape.h) })}
           />
           {model.mode === 'stacked' ? (
             <>
@@ -486,7 +529,7 @@ export default function Studio({ target, filaments, onFilaments, onSaved }: Prop
                     unit="mm"
                     step={0.5}
                     min={1}
-                    value={post.width > 0 ? post.width : postLength(grid, effective)}
+                    value={post.width > 0 ? post.width : postLength(shape, effective)}
                     onChange={(width) => setPost({ width })}
                   />
                   <button className={'chip' + (post.width === 0 ? ' on' : '')} onClick={() => setPost({ width: 0 })}>

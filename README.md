@@ -3,7 +3,7 @@
 Turn video game sprite sheets into 3D-printable pixel figures with real filament colors.
 
 1. **Library** – import sprite sheets (PNG/GIF/WebP; drag, drop or paste). Sheets and saved figures are kept in your browser (IndexedDB).
-2. **Slice** – find sprites automatically (islands of non-background pixels, with nearby pieces joined) or with a fixed grid. Transparent and solid-color backdrops both work; pick the backdrop color from the sheet if needed. Upscaled rips (2×, 3×…) are detected and reduced back to one cell per art pixel.
+2. **Slice** – find sprites automatically (islands of non-background pixels, with nearby pieces joined) or with a fixed grid. Transparent and solid-color backdrops both work; pick the backdrop color from the sheet if needed. Upscaled rips (2×, 3×…) are detected and reduced back to one cell per art pixel. Selecting a sprite on the sheet scrolls the sprite list to it, and selecting one in the list scrolls the sheet to it.
 3. **Build** – map each sprite color to a filament, preview in 3D, and export.
 
 ## Figure styles
@@ -14,6 +14,8 @@ Turn video game sprite sheets into 3D-printable pixel figures with real filament
 | 2-sided | Colored faces on both sides around the core. The back shows the mirrored sprite. |
 | Stacked | Each filament sits at its own height (levels set per filament), so colors read as raised layers. |
 | Flat | One level; every pixel is a full-thickness column of its color. |
+
+**Border:** add an outline around the sprite in its own filament (black by default), 1–4 px wide, with filled or notched corners. It counts as part of the sprite for sizing, the post and magnets.
 
 **Stand:** optional round, oval, square or rectangular base with slots. Auto picks the smallest common miniature base (20/25/32/40/50/60 mm) that fits the post and any base magnets. Height and edge bevel are adjustable.
 

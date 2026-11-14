@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoRects, extractSprite, gridRects, guessBackground, DEFAULT_SLICE, type Img } from '../src/lib/sprite';
+import { addBorder, autoRects, BORDER, extractSprite, gridRects, guessBackground, DEFAULT_SLICE, type Img } from '../src/lib/sprite';
 import { autoMap, DEFAULT_FILAMENTS } from '../src/lib/palette';
 
 function makeImg(w: number, h: number, fill: [number, number, number, number]): Img {
@@ -56,5 +56,26 @@ describe('autoMap', () => {
     expect(new Set(Object.values(map)).size).toBe(3);
     expect(map['#000000']).toBe('black');
     expect(map['#ff0000']).toBe('red');
+  });
+});
+
+describe('addBorder', () => {
+  const dot = { w: 1, h: 1, px: ['#ff0000'] };
+  it('outlines with corners', () => {
+    const g = addBorder(dot, 1, true);
+    expect(g.w).toBe(3);
+    expect(g.px.filter((p) => p === BORDER).length).toBe(8);
+    expect(g.px[4]).toBe('#ff0000');
+  });
+  it('outlines without corners and grows with width', () => {
+    expect(addBorder(dot, 1, false).px.filter((p) => p === BORDER).length).toBe(4);
+    const g = addBorder(dot, 2, true);
+    expect(g.w).toBe(5);
+    expect(g.px.filter((p) => p === BORDER).length).toBe(24);
+  });
+  it('outlines holes inside the sprite too', () => {
+    const ring = { w: 3, h: 3, px: ['#a', '#a', '#a', '#a', null, '#a', '#a', '#a', '#a'] };
+    const g = addBorder(ring, 1, true);
+    expect(g.px[2 * 5 + 2]).toBe(BORDER);
   });
 });
