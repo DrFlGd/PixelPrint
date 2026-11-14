@@ -52,6 +52,24 @@ export default function Slicer({ sheet, onChange, onBuild }: Props) {
     });
   }, [img, rects, zoom, selected, hover]);
 
+  // Keep the sheet and the sprite list showing the same sprite.
+  const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  useEffect(() => {
+    const r = rects[selected];
+    const view = wrap.current, c = canvas.current;
+    if (!r || !view || !c) return;
+    const smooth = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    thumbRefs.current[selected]?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: smooth });
+    const vb = view.getBoundingClientRect(), cb = c.getBoundingClientRect();
+    const left = cb.left - vb.left + view.scrollLeft + r.x * zoom;
+    const top = cb.top - vb.top + view.scrollTop + r.y * zoom;
+    const w = r.w * zoom, h = r.h * zoom;
+    const visible =
+      left >= view.scrollLeft && top >= view.scrollTop && left + w <= view.scrollLeft + view.clientWidth && top + h <= view.scrollTop + view.clientHeight;
+    if (!visible)
+      view.scrollTo({ left: left + w / 2 - view.clientWidth / 2, top: top + h / 2 - view.clientHeight / 2, behavior: smooth });
+  }, [selected, rects, zoom]);
+
   const at = (e: React.MouseEvent) => {
     const b = canvas.current!.getBoundingClientRect();
     return {
@@ -182,6 +200,9 @@ export default function Slicer({ sheet, onChange, onBuild }: Props) {
           {thumbs.map((t, i) => (
             <button
               key={i}
+              ref={(el) => {
+                thumbRefs.current[i] = el;
+              }}
               className={'thumb checker' + (i === selected ? ' on' : '')}
               onClick={() => setSelected(i)}
               onDoubleClick={() => onBuild(rects[i], i)}

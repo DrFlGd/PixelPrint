@@ -1,5 +1,5 @@
 import { MeshBuilder, circle, fillPolygon, wall, type Mesh, type P2 } from './mesh';
-import type { PixelGrid } from './sprite';
+import { DEFAULT_BORDER, type BorderSettings, type PixelGrid } from './sprite';
 import type { ColorMapping } from './palette';
 import { buildStand, slotDepth, DEFAULT_POST, type Slot, type StandSettings } from './stand';
 import {
@@ -31,6 +31,8 @@ export interface ModelSettings {
   stand: StandSettings;
   /** Magnet pockets in the back of the figure. */
   magnets: MagnetSettings;
+  /** Outline added around the sprite. */
+  border: BorderSettings;
 }
 
 export const DEFAULT_MODEL: ModelSettings = {
@@ -57,6 +59,7 @@ export const DEFAULT_MODEL: ModelSettings = {
     magnets: { ...DEFAULT_MAGNETS, count: 2 },
   },
   magnets: DEFAULT_MAGNETS,
+  border: DEFAULT_BORDER,
 };
 
 /** Fill in settings added after a design was saved. */
@@ -71,6 +74,7 @@ export function withDefaults(s: Partial<ModelSettings>): ModelSettings {
       magnets: { ...DEFAULT_MODEL.stand.magnets, ...s.stand?.magnets },
     },
     magnets: { ...DEFAULT_MAGNETS, ...s.magnets },
+    border: { ...DEFAULT_BORDER, ...s.border },
   };
 }
 
